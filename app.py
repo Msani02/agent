@@ -4,7 +4,7 @@ import pandas as pd
 import numpy as np
 import os
 import random
-import shap
+
 
 # --- PAGE CONFIG ---
 st.set_page_config(
@@ -199,11 +199,13 @@ def predict_risk():
     pred = pkg['model'].predict(df)[0]
     prob = pkg['model'].predict_proba(df)[0][1]
     
-    explainer = shap.TreeExplainer(pkg['model'])
-    shap_v = explainer.shap_values(df)
-    vals = shap_v[1] if isinstance(shap_v, list) else (shap_v[0,:,1] if len(shap_v.shape)==3 else shap_v[0])
-    feat_imp = pd.DataFrame({'f': pkg['feature_names'], 'v': vals}).sort_values('v', ascending=False).head(3)
-    factors = ", ".join(feat_imp['f'].tolist())
+    # Replacement for SHAP with simple feature importance for production-ready app
+    if hasattr(pkg['model'], 'feature_importances_'):
+        importances = pkg['model'].feature_importances_
+        indices = np.argsort(importances)[-3:][::-1]
+        factors = ", ".join([pkg['feature_names'][i] for i in indices])
+    else:
+        factors = "varied clinical markers"
     
     return pred, prob, factors
 
