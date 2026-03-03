@@ -92,7 +92,7 @@ st.markdown("""
 # --- ASSETS LOADING ---
 @st.cache_resource
 def load_assets():
-    path = "models/best_model.pkl"
+    path = "models/production_model.pkl"
     if not os.path.exists(path):
         return None
     return joblib.load(path)
