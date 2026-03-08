@@ -8,7 +8,7 @@ import random
 
 # --- PAGE CONFIG ---
 st.set_page_config(
-    page_title="Diabetes AI | Clinical Assistant",
+    page_title="AI Diagnostic Consultation for Diabetes",
     page_icon="🩺",
     layout="wide"
 )
@@ -216,6 +216,10 @@ if "inputs" not in st.session_state:
     st.session_state.inputs = {}
 if "complete" not in st.session_state:
     st.session_state.complete = False
+if "feedback_collected" not in st.session_state:
+    st.session_state.feedback_collected = False
+if "feedback_list" not in st.session_state:
+    st.session_state.feedback_list = []
 if "questions_pool" not in st.session_state:
     pool = list(QUESTIONS.keys())
     random.shuffle(pool)
@@ -228,53 +232,60 @@ if "current_q" not in st.session_state:
 with st.sidebar:
     st.markdown("<h2 style='color: white; font-size: 20px; font-weight: bold;'>Clinical Console</h2>", unsafe_allow_html=True)
     st.caption("Human-Centric Assistant v5.1")
-    st.info(f"**Model Engine:** {pkg['model_name']}\n**Privacy:** Zero-API (Local)")
+    # Technical details removed as per requirements
     
     st.divider()
     if st.button("Reset Assessment", use_container_width=True):
         st.session_state.clear()
         st.rerun()
 
-st.markdown("<h2 style='text-align: center; color: white; margin-bottom: 2rem;'>AI Diagnostic Consultation</h2>", unsafe_allow_html=True)
+st.markdown("<h2 style='text-align: center; color: white; margin-bottom: 2rem;'>AI Diagnostic Consultation for Diabetes</h2>", unsafe_allow_html=True)
 
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-if not st.session_state.complete:
-    prompt = st.chat_input("Enter your response here...")
+# --- MAIN CHAT INPUT & LOGIC ---
+prompt = st.chat_input("Enter your response here...")
+
+if prompt:
+    st.session_state.messages.append({"role": "user", "content": prompt})
     
-    if prompt:
-        st.session_state.messages.append({"role": "user", "content": prompt})
-        
-        # Initial flow to start questioning
-        if st.session_state.current_q is None and not st.session_state.inputs:
-            st.session_state.current_q = st.session_state.questions_pool.pop(0)
-            st.session_state.messages.append({"role": "assistant", "content": random.choice(QUESTIONS[st.session_state.current_q])})
-        
-        # Data handling
-        elif st.session_state.current_q:
-            try:
-                val = float(prompt)
-                st.session_state.inputs[st.session_state.current_q] = val
+    # 1. Feedback handling (if assessment is complete)
+    if st.session_state.complete:
+        st.session_state.feedback_list.append(prompt)
+        st.session_state.messages.append({"role": "assistant", "content": "Thank you for your feedback. Is there anything else you'd like to discuss or another clinical question you have?"})
+
+    # 2. Initial flow to start questioning
+    elif st.session_state.current_q is None and not st.session_state.inputs:
+        st.session_state.current_q = st.session_state.questions_pool.pop(0)
+        st.session_state.messages.append({"role": "assistant", "content": random.choice(QUESTIONS[st.session_state.current_q])})
+    
+    # 3. Data handling during questioning
+    elif st.session_state.current_q:
+        try:
+            val = float(prompt)
+            st.session_state.inputs[st.session_state.current_q] = val
+            
+            if st.session_state.questions_pool:
+                st.session_state.current_q = st.session_state.questions_pool.pop(0)
+                response = f"{random.choice(ACKNOWLEDGEMENTS)} {random.choice(BRIDGES)} {random.choice(QUESTIONS[st.session_state.current_q])}"
+                st.session_state.messages.append({"role": "assistant", "content": response})
+            else:
+                st.session_state.messages.append({"role": "assistant", "content": "Thank you. The clinical intake is now complete. One moment while I synthesize your diagnostic profile..."})
+                st.session_state.complete = True
+                pred, prob, factors = predict_risk()
+                report = generate_report(pred, prob, factors)
                 
-                # Combine acknowledgement and next question if any
-                if st.session_state.questions_pool:
-                    st.session_state.current_q = st.session_state.questions_pool.pop(0)
-                    response = f"{random.choice(ACKNOWLEDGEMENTS)} {random.choice(BRIDGES)} {random.choice(QUESTIONS[st.session_state.current_q])}"
-                    st.session_state.messages.append({"role": "assistant", "content": response})
-                else:
-                    st.session_state.messages.append({"role": "assistant", "content": "Thank you. The clinical intake is now complete. One moment while I synthesize your diagnostic profile..."})
-                    st.session_state.complete = True
-                    pred, prob, factors = predict_risk()
-                    report = generate_report(pred, prob, factors)
-                    st.session_state.messages.append({"role": "assistant", "content": report})
-                    st.session_state.final_results = {"pred": pred, "prob": prob}
-                    
-            except ValueError:
-                st.session_state.messages.append({"role": "assistant", "content": "Pardon me, I'll need a numeric value for that specific clinical record."})
-        
-        st.rerun()
+                # Append report and then ask for feedback
+                st.session_state.messages.append({"role": "assistant", "content": report})
+                st.session_state.messages.append({"role": "assistant", "content": "Was this consultation helpful? Your feedback helps improve the AI assistant."})
+                st.session_state.final_results = {"pred": pred, "prob": prob}
+                
+        except ValueError:
+            st.session_state.messages.append({"role": "assistant", "content": "Pardon me, I'll need a numeric value for that specific clinical record."})
+    
+    st.rerun()
 
 if st.session_state.complete and hasattr(st.session_state, 'final_results'):
     res = st.session_state.final_results
@@ -288,7 +299,7 @@ if st.session_state.complete and hasattr(st.session_state, 'final_results'):
         st.metric("Calculation Accuracy", f"{res['prob']*100:.2f}%")
     with col2:
         st.write("**Assessment Origin:**")
-        st.caption("Human-Centric Rule Engine v5.1")
+        st.caption("Human-Centric Assistant v5.1")
     st.markdown("</div>", unsafe_allow_html=True)
 
 st.markdown("<div class='mt-20 mb-10 text-center text-slate-600 text-[10px] font-bold tracking-[0.2em] uppercase text-white'>Clinical Intelligence Platform © 2026</div>", unsafe_allow_html=True)
